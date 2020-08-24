@@ -12,15 +12,19 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
-#include "const.h"
 #include "classical2mee.h"
 #include "matrix_loader.h"
 #include "c_functions.h"
 #include "mee2rv.h"
 #include "ecef2eci.h"
 #include "eci2ecef.h"
-#include "EGM2008.h"
 #include "inertial2radial.h"
+#include "EGM2008.h"
+
+
+
+
+#include "const.h"
 
 int main(){
 
@@ -161,7 +165,7 @@ int main(){
       // clock_t startTime = clock();
 
       // Compute SH gravity
-      EGM2008(xECEF, aECEF, Deg);
+       GM_B(xECEF, aECEF, Deg);
 
       // Convert from ECEF to ECI
       ecef2eci(times[i-1],aECEF,aECI);

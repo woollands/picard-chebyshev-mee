@@ -22,7 +22,7 @@ DEPS1 = $(patsubst %,$(IDIR)/%,$(_DEPS1))
 _DEPS2 = clenshaw_curtis_ivpI.h lsq_chebyshev_fit.h chebyshev.h c_functions.h
 DEPS2 = $(patsubst %,$(IDIR)/%,$(_DEPS2))
 
-_OBJ1 = test_mee.o c_functions.o classical2mee.o matrix_loader.o mee2rv.o ecef2eci.o eci2ecef.o EGM2008.o \
+_OBJ1 = test_mee.o c_functions.o classical2mee.o matrix_loader.o mee2rv.o ecef2eci.o eci2ecef.o GM.o \
 inertial2radial.o
 OBJ1 = $(patsubst %,$(ODIR)/%,$(_OBJ1))
 
