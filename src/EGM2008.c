@@ -1,38 +1,100 @@
+/*! \mainpage EGM2008.c Calculates gravity according to the EGM 2008 Spherical Harmonic Model
+*  AUTHORS:          Austin Probe (abprobe88@gmail.com) and Brent Macomber (brentmacomber@gmail.com)
+*  DATE WRITTEN:     October 2014
+*  LAST MODIFIED:    May 2016
+*  AFFILIATION:      Department of Aerospace Engineering, Texas A&M University, College Station, TX
+*  DESCRIPTION:      Computes Spherical Harmonic gravity for Orbit propagation using MCPI
+*
+*
+*/
+
+
+/*!
+@file EGM2008.c
+*/
+
+/*! \file EGM2008.c EGM2008 Function File
+* This file contains the fuctions for the EGM2008 Gravity Spherical
+* harmonic libriary
+*/
 
 #include "EGM2008.h"
 #include "EGM2008.cc"
 #include "eci2ecef.h"
 #include "const.h"
 
-double P [(Max_Degree+3)*(Max_Degree+3)] = {0.0};
-double scaleFactor [(Max_Degree+3)*(Max_Degree+3)] = {0.0};
+// Declare Needed Variables
+/*!
+* This is the allocation for the maximum size associated
+* Legendre polynomical matrix
+*/
+// double P [(Max_Degree+3)*(Max_Degree+3)] = {0.0};
+/*!
+* This is the allocation for the maximum size associated
+* Legendre polynomical matrix scale factor
+*/
+// double scaleFactor [(Max_Degree+3)*(Max_Degree+3)] = {0.0};
 
-void EGM2008( double* xECEF, double* aECEF, int DEG)
+/*!
+* \brief Matrix Multiplication
+* This is a simple matrix multiplication function
+*
+* \param[in] A Vector representation of matrix A
+* \param[in] B Vector representation of matrix B
+* \param[in] m Column dimension of A
+* \param[in] n Shared dimension of A and B
+* \param[in] q Row dimension of B
+* \param[out] OUT Matrix Output
+*/
+void matmulEGM(double* A, double* B, double* OUT, int m, int n, int q)
+{
+	for(int i=0;i<m; i++){
+		for(int j=0;j<q;j++){
+			double sum = {0.0};
+			for(int j1=0;j1<n;j1++)
+			sum += A[IDX2F(i+1,j1+1,m)]*B[IDX2F(j1+1,j+1,n)];
+			OUT[IDX2F(i+1,j+1,m)] = sum;
+		}
+	}
+}
+
+/*!
+* \brief Gravity Evaluation
+* This is the function that evaluates the spherical harmonic
+* series to provide acceleration
+*
+* \param[in] p 3 element position in ECEF
+* \param[in] Deg Degree and order of the serries to be used
+* \param[out] Gxyz Gravitational Acceloration Output
+*/
+void EGM2008( double* p, double* Gxyz, int DEG)
 {
 
-	// double P[(Max_Degree+3)*(Max_Degree+3)];
-  // memset( P, 0.0, ((Max_Degree+3)*(Max_Degree+3)*sizeof(double)));
-	// double scaleFactor[(Max_Degree+3)*(Max_Degree+3)];
-  // memset( scaleFactor, 0.0, ((Max_Degree+3)*(Max_Degree+3)*sizeof(double)));
-
-	double r       = {0.0};
-	double phic    = {0.0};
-	double lambda  = {0.0};
-	double slambda = {0.0};
-	double clambda = {0.0};
+	double P [(Max_Degree+3)*(Max_Degree+3)] = {0.0};
+	double scaleFactor [(Max_Degree+3)*(Max_Degree+3)] = {0.0};
+	
+	double r             = {0.0};
+	double phic          = {0.0};
+	double lambda        = {0.0};
+	double slambda       = {0.0};
+	double clambda       = {0.0};
 	double x = {0.0};
 	double y = {0.0};
 	double z = {0.0};
 	double smlambda[Max_Degree+1] = {0.0};
 	double cmlambda[Max_Degree+1] = {0.0};
 
-	x = xECEF[0];
-	y = xECEF[1];
-	z = xECEF[2];
+	// determine radius of this thread's node
+	x = p[0];
+	y = p[1];
+	z = p[2];
 
+	// Compute geocentric radius
 	r = pow( x*x + y*y + z*z , 0.5 );
-	phic   = asin( z / r );
-	lambda = atan2( y, x );
+	// Compute geocentric latitude
+	phic  = asin( z / r );
+	// Compute lambda
+	lambda  = atan2( y, x );
 	while (lambda<0)
 	lambda = lambda+2*C_PI;
 	while (lambda>=2*C_PI)
@@ -54,7 +116,7 @@ void EGM2008( double* xECEF, double* aECEF, int DEG)
 
 	loc_gravLegendre( phic, scaleFactor, P , DEG);
 
-	loc_gravityPCPF( xECEF, P, DEG, smlambda, cmlambda, r, scaleFactor, aECEF );
+	loc_gravityPCPF( p, P, DEG, smlambda, cmlambda, r, scaleFactor, Gxyz );
 
 
 }
@@ -133,7 +195,7 @@ void EGM2008Pot( double* p, double* Pot, int DEG)
 void loc_gravLegendre( double phi, double* scaleFactor, double* P, int DEG )
 {
 
-	// int k, p;
+	int k, p;
 	double cphi = {0.0};
 	double sphi = {0.0};
 
@@ -183,14 +245,12 @@ void loc_gravLegendre( double phi, double* scaleFactor, double* P, int DEG )
 	//     }
 
 	// Old Method
-	int nn;
-	// #pragma omp parallel for default(none) shared(cphi,sphi,DEG,Max_Degree,P,scaleFactor)
-	for (nn = 2; nn <= DEG+2;nn++){
+	for (int nn = 2; nn <= DEG+2;nn++){
 		double n = (double)nn;
-		int k = nn + 1;
+		k = nn + 1;
 		for(int mm=0; mm<=n;mm++) {
 			double m = (double)mm;
-			int p = mm + 1;
+			p = mm + 1;
 			// Compute normalized associated legendre polynomials, P, via recursion relations
 			// Scale Factor needed for normalization of dUdphi partial derivative
 			if (n == m){
@@ -223,7 +283,7 @@ void loc_gravLegendre( double phi, double* scaleFactor, double* P, int DEG )
 * \param[in] smlambda Trigonometric function of longitude
 * \param[out] Gxyz Gravitational Acceloration Output
 */
-void loc_gravityPCPF( double* p, double* P, int DEG, double* smlambda, double* cmlambda, double r, double* scaleFactor, double* aECEF )
+void loc_gravityPCPF( double* p, double* P, int DEG, double* smlambda, double* cmlambda, double r, double* scaleFactor, double* Gxyz )
 {
 
 	int k, j;
@@ -244,30 +304,75 @@ void loc_gravityPCPF( double* p, double* P, int DEG, double* smlambda, double* c
 	double dUdphi  = {0.0};
 	double dUdlambda = {0.0};
 
+
+
 	double x = p[0];
 	double y = p[1];
 	double z = p[2];
 	radu = r;
 	rRatio = C_Req/radu;
 	rRatio_n = rRatio;
+	// summation of gravity in radial coordinates
+
+
+
+
+	//    // New Method
+	//        int nn = 2;
+	//        int mm = 0;
+	//        double m, n;
+	//        dUdrSumM      = 0.0;
+	//        dUdphiSumM    = 0.0;
+	//        dUdlambdaSumM = 0.0;
+	//        int limit = (DEG+1)*(DEG+2)/2;
+	//        for (int counter = 3; counter <= limit;counter++){
+	//            k = nn + 1;
+	//            j = mm + 1;
+	//            n = coefMatrix[counter][0];
+	//            m = coefMatrix[counter][1];
+
+	//            switch ( (int)(coefMatrix[counter][4]) )
+	//           {
+	//              case 1:
+	//                dUdrSumM      = dUdrSumM + P[IDX2F(k,j,Max_Degree+3)] *(C[IDX2F(k,j,Max_Degree)]*cmlambda[j-1] + S[IDX2F(k,j,Max_Degree)]*smlambda[j-1]);
+	//                dUdphiSumM    = dUdphiSumM + ((P[IDX2F(k,j+1,Max_Degree+3)]*scaleFactor[IDX2F(k,j,Max_Degree+3)]) - z/(sqrt(x*x + y*y))*m*P[IDX2F(k,j,Max_Degree+3)])*(C[IDX2F(k,j,Max_Degree)]*cmlambda[j-1] + S[IDX2F(k,j,Max_Degree)]*smlambda[j-1]);
+	//                dUdlambdaSumM = dUdlambdaSumM + m*P[IDX2F(k,j,Max_Degree+3)]*(S[IDX2F(k,j,Max_Degree)]*cmlambda[j-1] - C[IDX2F(k,j,Max_Degree)]*smlambda[j-1]);
+	//                rRatio_n = rRatio_n*rRatio;
+	//                dUdrSumN      = dUdrSumN      + dUdrSumM*rRatio_n*k;
+	//                dUdphiSumN    = dUdphiSumN    + dUdphiSumM*rRatio_n;
+	//                dUdlambdaSumN = dUdlambdaSumN + dUdlambdaSumM*rRatio_n;
+	//                 nn++;
+	//                 mm = 0;
+	//                 dUdrSumM      = 0.0;
+	//                 dUdphiSumM    = 0.0;
+	//                 dUdlambdaSumM = 0.0;
+	//                 break;
+	//              default:
+	//                dUdrSumM      = dUdrSumM + P[IDX2F(k,j,Max_Degree+3)] *(C[IDX2F(k,j,Max_Degree)]*cmlambda[j-1] + S[IDX2F(k,j,Max_Degree)]*smlambda[j-1]);
+	//                dUdphiSumM    = dUdphiSumM + ((P[IDX2F(k,j+1,Max_Degree+3)]*scaleFactor[IDX2F(k,j,Max_Degree+3)]) - z/(sqrt(x*x + y*y))*m*P[IDX2F(k,j,Max_Degree+3)])*(C[IDX2F(k,j,Max_Degree)]*cmlambda[j-1] + S[IDX2F(k,j,Max_Degree)]*smlambda[j-1]);
+	//                dUdlambdaSumM = dUdlambdaSumM + m*P[IDX2F(k,j,Max_Degree+3)]*(S[IDX2F(k,j,Max_Degree)]*cmlambda[j-1] - C[IDX2F(k,j,Max_Degree)]*smlambda[j-1]);
+	//                mm++;
+
+	//           }
+
+	//        }
 
 	// // Old Method
-	// #pragma omp parallel for default(none) shared(rRatio,DEG,cmlambda,smlambda,scaleFactor,P,x,y,z) firstprivate(rRatio_n) private(dUdrSumM,dUdphiSumM,dUdlambdaSumM) reduction(+:dUdrSumN,dUdlambdaSumN,dUdphiSumN)
 	for (int n = 2; n <= DEG; n++) {
-		int k = n+1;
+		k = n+1;
 		rRatio_n = rRatio_n*rRatio;
 		dUdrSumM      = 0.0;
 		dUdphiSumM    = 0.0;
 		dUdlambdaSumM = 0.0;
 		for (int m = 0; m <= n; m++){
-			int j = m+1;
+			j = m+1;
 			dUdrSumM      = dUdrSumM + P[IDX2F(k,j,Max_Degree+3)] *(C[IDX2F(k,j,Max_Degree)]*cmlambda[j-1] + S[IDX2F(k,j,Max_Degree)]*smlambda[j-1]);
 			dUdphiSumM    = dUdphiSumM + ((P[IDX2F(k,j+1,Max_Degree+3)]*scaleFactor[IDX2F(k,j,Max_Degree+3)]) - z/(sqrt(x*x + y*y))*m*P[IDX2F(k,j,Max_Degree+3)])*(C[IDX2F(k,j,Max_Degree)]*cmlambda[j-1] + S[IDX2F(k,j,Max_Degree)]*smlambda[j-1]);
 			dUdlambdaSumM = dUdlambdaSumM + m*P[IDX2F(k,j,Max_Degree+3)]*(S[IDX2F(k,j,Max_Degree)]*cmlambda[j-1] - C[IDX2F(k,j,Max_Degree)]*smlambda[j-1]);
 		}
-		dUdrSumN      += dUdrSumM*rRatio_n*k;
-		dUdphiSumN    += dUdphiSumM*rRatio_n;
-		dUdlambdaSumN += dUdlambdaSumM*rRatio_n;
+		dUdrSumN      = dUdrSumN      + dUdrSumM*rRatio_n*k;
+		dUdphiSumN    = dUdphiSumN    + dUdphiSumM*rRatio_n;
+		dUdlambdaSumN = dUdlambdaSumN + dUdlambdaSumM*rRatio_n;
 	}
 
 	// gravity in spherical coordinates
@@ -276,9 +381,19 @@ void loc_gravityPCPF( double* p, double* P, int DEG, double* smlambda, double* c
 	dUdlambda =  C_MU/radu*dUdlambdaSumN ;
 
 	//gravity in ECEF coordinates
-	aECEF[0] = ((1.0/radu)*dUdr - (z/(radu*radu*sqrt(x*x + y*y)))*dUdphi)*x - (dUdlambda/(x*x + y*y))*y;
-	aECEF[1] = ((1.0/radu)*dUdr - (z/(radu*radu*sqrt(x*x + y*y)))*dUdphi)*y + (dUdlambda/(x*x + y*y))*x;
-	aECEF[2] = (1.0/radu)*dUdr*z + ((sqrt(x*x + y*y))/(radu*radu))*dUdphi;
+	Gxyz[0] = ((1.0/radu)*dUdr - (z/(radu*radu*sqrt(x*x + y*y)))*dUdphi)*x - (dUdlambda/(x*x + y*y))*y;
+	Gxyz[1] = ((1.0/radu)*dUdr - (z/(radu*radu*sqrt(x*x + y*y)))*dUdphi)*y + (dUdlambda/(x*x + y*y))*x;
+	Gxyz[2] = (1.0/radu)*dUdr*z + ((sqrt(x*x + y*y))/(radu*radu))*dUdphi;
+
+	// special case for poles
+	/*
+	atPole = abs(atan2(p[IDX2F(i+1,3,M)],sqrt(p[IDX2F(i+1,1,M)]^2 + p[IDX2F(i+1,2,M)]^2)))==C_PI/2;
+	if any(atPole){
+	gx(atPole) = 0;
+	gy(atPole) = 0;
+	gz(atPole) = (1./r(atPole)).*dUdr(atPole).*p((atPole),3);
+}
+*/
 
 }
 
@@ -330,23 +445,22 @@ void loc_gravityPot( double* p, double* P, int DEG, double* smlambda, double* cm
 	rRatio_n = rRatio;
 	// summation of gravity in radial coordinates
 
-// #pragma omp parallel for default(none) shared(rRatio,DEG,cmlambda,smlambda,scaleFactor,P,x,y,z) firstprivate(rRatio_n) private(dUdrSumM,dUdphiSumM,dUdlambdaSumM) reduction(+:dUdrSumN,dUdlambdaSumN,dUdphiSumN)
 	for (n = 2; n <= DEG; n++) {
-		int k = n+1;
+		k = n+1;
 		rRatio_n = rRatio_n*rRatio;
 		dUdrSumM      = 0.0;
 		dUdphiSumM    = 0.0;
 		dUdlambdaSumM = 0.0;
-		for (int m = 0; m <= n; m++){
-			int j = m+1;
+		for (m = 0; m <= n; m++){
+			j = m+1;
 			dUdrSumM      = dUdrSumM + P[IDX2F(k,j,Max_Degree+3)] *(C[IDX2F(k,j,Max_Degree)]*cmlambda[j-1] + S[IDX2F(k,j,Max_Degree)]*smlambda[j-1]);
 			dUdphiSumM    = dUdphiSumM + ((P[IDX2F(k,j+1,Max_Degree+3)]*scaleFactor[IDX2F(k,j,Max_Degree+3)]) - z/(sqrt(x*x + y*y))*m*P[IDX2F(k,j,Max_Degree+3)])*(C[IDX2F(k,j,Max_Degree)]*cmlambda[j-1] + S[IDX2F(k,j,Max_Degree)]*smlambda[j-1]);
 			dUdlambdaSumM = dUdlambdaSumM + m*P[IDX2F(k,j,Max_Degree+3)]*(S[IDX2F(k,j,Max_Degree)]*cmlambda[j-1] - C[IDX2F(k,j,Max_Degree)]*smlambda[j-1]);
 			// printf("UsumM: %e\n ",dUdrSumM);
 		}
-		dUdrSumN      += dUdrSumM*rRatio_n;
-		dUdphiSumN    += dUdphiSumM*rRatio_n;
-		dUdlambdaSumN += dUdlambdaSumM*rRatio_n;
+		dUdrSumN      = dUdrSumN      + dUdrSumM*rRatio_n;
+		dUdphiSumN    = dUdphiSumN    + dUdphiSumM*rRatio_n;
+		dUdlambdaSumN = dUdlambdaSumN + dUdlambdaSumM*rRatio_n;
 	}
 	// gravity in spherical coordinates
 	dUdr      =  C_MU/(radu)*dUdrSumN ;
@@ -356,6 +470,7 @@ void loc_gravityPot( double* p, double* P, int DEG, double* smlambda, double* cm
 	// gravity in potential
 	// *Pot = MU * sqrt(dUdr*dUdr + dUdphi*dUdphi + dUdlambda*dUdlambda)/radu;
 	*Pot =  sqrt(dUdr*dUdr);
+
 
 }
 

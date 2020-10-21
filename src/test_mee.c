@@ -7,7 +7,7 @@
 *  REFERENCE:
 */
 
-// #include <omp.h>
+#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -20,13 +20,17 @@
 #include "ecef2eci.h"
 #include "eci2ecef.h"
 #include "EGM2008.h"
+#include "perturbed_gravity.h"
 #include "inertial2radial.h"
 
 int main(){
 
-  int N       = 130;    // Chebyshev Order
+  struct timeval start, end;
+  gettimeofday(&start,NULL);
+
+  int N       = 200;    // Chebyshev Order
   int M       = N;      // Number of Nodes
-  double Deg  = 40.0;   // Gravity Degree
+  double Deg  = 100.0;   // Gravity Degree
 
   double T1[(M+1)*(N+1)];     // [(M+1)x(N+1)]
   memset( T1, 0.0, ((M+1)*(N+1)*sizeof(double)));
@@ -119,7 +123,7 @@ int main(){
 
   // MCPI IVP
   double mcpi_tol = 1.0e-13;
-  double M_tol    = 1.0e-13;
+  double Feval[2] = {0.0};
   int itr         = 0;
   double errX     = 1.0;
 
@@ -128,29 +132,36 @@ int main(){
   double mee_dot[(M+1)*6];
   memset( mee_dot, 0.0, ((M+1)*6*sizeof(double)));
 
-  double r_eci[3]  = {0.0};
-  double v_eci[3]  = {0.0};
-  double xECEF[3]  = {0.0};
-  double vECEF[3]  = {0.0};
-  double aECEF[3]  = {0.0};
-  double aECI[3]   = {0.0};
-  double TB[3]     = {0.0};
-  double ad_eci[3] = {0.0};
-  double xrdl[3]   = {0.0};
-  double yrdl[3]   = {0.0};
-  double zrdl[3]   = {0.0};
-  double a_r  = 0.0;
-  double a_t  = 0.0;
-  double a_h  = 0.0;
-  double cosL = 0.0;
-  double sinL = 0.0;
-  double sqpm = 0.0;
-  double q    = 0.0;
-  double s_sq = 0.0;
+  // clock_t startTime = clock();
 
   while (errX > mcpi_tol){
 
-    for (int i=1; i<=M+1; i++){
+    // clock_t startTime = clock();
+
+    int i;
+    // #pragma omp parallel for default(none) shared(W2,M,mee,mee_dot,Deg,times,errX,mcpi_tol,itr,Feval)
+    //private(r_eci,v_eci,xECEF,vECEF,aECEF,aECI,TB,ad_eci,xrdl,yrdl,zrdl,a_r,a_t,a_h,cosL,sinL,sqpm,q,s_sq)
+    for (i=1; i<=M+1; i++){
+
+      double r_eci[3]  = {0.0};
+      double v_eci[3]  = {0.0};
+      double xECEF[3]  = {0.0};
+      double vECEF[3]  = {0.0};
+      double aECEF[3]  = {0.0};
+      double aECI[3]   = {0.0};
+      double TB[3]     = {0.0};
+      double ad_eci[3] = {0.0};
+      double xrdl[3]   = {0.0};
+      double yrdl[3]   = {0.0};
+      double zrdl[3]   = {0.0};
+      double a_r  = 0.0;
+      double a_t  = 0.0;
+      double a_h  = 0.0;
+      double cosL = 0.0;
+      double sinL = 0.0;
+      double sqpm = 0.0;
+      double q    = 0.0;
+      double s_sq = 0.0;
 
       // Convert MEE to Cartesian ECI
       mee2rv(mee[ID2(i,1,M+1)],mee[ID2(i,2,M+1)],mee[ID2(i,3,M+1)],mee[ID2(i,4,M+1)],mee[ID2(i,5,M+1)],mee[ID2(i,6,M+1)],r_eci,v_eci);
@@ -158,10 +169,9 @@ int main(){
       // Convert from ECI to ECEF
       eci2ecef(times[i-1],r_eci,v_eci,xECEF,vECEF);
 
-      // clock_t startTime = clock();
-
       // Compute SH gravity
-      EGM2008(xECEF, aECEF, Deg);
+      // EGM2008(xECEF, aECEF, Deg);
+      perturbed_gravity(times[i-1],xECEF,errX,i,M,Deg,aECEF,mcpi_tol,&itr,Feval);
 
       // Convert from ECEF to ECI
       ecef2eci(times[i-1],aECEF,aECI);
@@ -196,6 +206,10 @@ int main(){
       mee_dot[ID2(i,6,M+1)] = W2*(sqrt(C_MU*mee[ID2(i,1,M+1)])*pow(q/mee[ID2(i,1,M+1)],2) + sqpm*(mee[ID2(i,4,M+1)]*sinL - mee[ID2(i,5,M+1)]*cosL)/q*a_h);
 
     } // M+1 loop
+
+    // clock_t endTime = clock();
+    // float elapsedTime = ((float) (endTime - startTime))/CLOCKS_PER_SEC/(1.0);
+    // printf("Elapsed time: %f s\n",elapsedTime);
 
     // Integrate
     double gamma[N*(M+1)];
@@ -234,11 +248,24 @@ int main(){
 
     // Iteration Counter
     itr = itr + 1;
-    printf("iter %i\n",itr);
+    // printf("iter %i\n",itr);
     if (itr > 20){
       break;
     }
 
   } // Picard-Chebyshev while-loop
+
+  // clock_t endTime = clock();
+  // float elapsedTime = ((float) (endTime - startTime))/CLOCKS_PER_SEC/(1.0);
+  // printf("Elapsed time: %f s\n",elapsedTime);
+
+  gettimeofday(&end,NULL);
+  double delta = ((end.tv_sec  - start.tv_sec) * 1000000u + end.tv_usec - start.tv_usec) / 1.e6;
+  printf("time: %f\n",delta);
+
+  for (int i=0; i<=5; i++){
+      printf("%1.15f\t",mee[ID2(M+1,i,M+1)]);
+  }
+  printf("\n");
 
 } // Main
