@@ -7,7 +7,7 @@
 *  REFERENCE:
 */
 
-#include <omp.h>
+//#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -25,8 +25,8 @@
 
 int main(){
 
-  struct timeval start, end;
-  gettimeofday(&start,NULL);
+  //struct timeval start, end;
+  //gettimeofday(&start,NULL);
 
   int N       = 200;    // Chebyshev Order
   int M       = N;      // Number of Nodes
@@ -259,9 +259,9 @@ int main(){
   // float elapsedTime = ((float) (endTime - startTime))/CLOCKS_PER_SEC/(1.0);
   // printf("Elapsed time: %f s\n",elapsedTime);
 
-  gettimeofday(&end,NULL);
-  double delta = ((end.tv_sec  - start.tv_sec) * 1000000u + end.tv_usec - start.tv_usec) / 1.e6;
-  printf("time: %f\n",delta);
+  // gettimeofday(&end,NULL);
+  // double delta = ((end.tv_sec  - start.tv_sec) * 1000000u + end.tv_usec - start.tv_usec) / 1.e6;
+  // printf("time: %f\n",delta);
 
   for (int i=0; i<=5; i++){
       printf("%1.15f\t",mee[ID2(M+1,i,M+1)]);

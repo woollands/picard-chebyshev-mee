@@ -23,16 +23,16 @@
 # 		rm *.o
 
 IDIR = ../include
-CC = clang
-# CC = gcc -std=c99 -g
+# CC = clang
+CC = gcc -std=c99 -g
 # CC = gcc-9 -std=c99 -g -fopenmp -lomp
 # CC = /usr/local/opt/llvm/bin/clang -fopenmp -L/usr/local/opt/llvm/lib gcc -std=c99 -g
 # CC = /usr/local/opt/llvm/bin/clang -fopenmp gcc -std=c99 -g
 # CC = clang -Xpreprocessor -fopenmp -lomp
 # clang -Xpreprocessor -fopenmp -lomp test_mee.c -o test
 
-# CFLAGS = -I$(IDIR)
-CFLAGS = -I$(IDIR) -Xpreprocessor -fopenmp -lomp
+CFLAGS = -I$(IDIR)
+#CFLAGS = -I$(IDIR) -Xpreprocessor -fopenmp -lomp
 
 ODIR = obj
 LDIR = ../lib
